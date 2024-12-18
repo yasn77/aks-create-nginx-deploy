@@ -1,0 +1,5 @@
+[tools]
+"pipx:azure-cli" = "latest"
+"aqua:opentofu/opentofu" = "latest"
+"aqua:kubernetes/kubectl" = "latest"
+"aqua:go-task/task" = "latest"

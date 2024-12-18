@@ -1,0 +1,70 @@
+# https://taskfile.dev
+
+version: "3"
+
+includes:
+  tf:
+    taskfile: ./tf/Taskfile.yml
+    dir: ./tf
+  k8s:
+    taskfile: ./k8s/Taskfile.yml
+    dir: ./k8s
+
+dotenv: [".env"]
+
+tasks:
+  az-login:
+    cmds:
+      - az login
+    status:
+      - az account show
+
+  az-sp-rbac:
+    cmds:
+      - task: az-login
+      - az ad sp create-for-rbac --skip-assignment > .az-sp-rbac
+    status:
+      - test -f .az-sp-rbac
+
+  update-tfvars-azure-auth:
+    cmds:
+      - task: az-sp-rbac
+      - |
+        echo "appId = $(cat .az-sp-rbac | jq '.appId')" > tf/terraform.tfvars
+        echo "password = $(cat .az-sp-rbac | jq '.password')" >> tf/terraform.tfvars
+
+  create-aks:
+    cmds:
+      - task: update-tfvars-azure-auth
+      - task: tf:apply
+
+  get-kubeconfig:
+    vars:
+      RESOURCE_GROUP_NAME:
+        sh: task tf:get-resource-group-name
+      KUBERNETES_CLUSTER_NAME:
+        sh: task tf:get-kubernetes-cluster-name
+    cmds:
+      - |
+        az login --scope https://management.core.windows.net//.default
+        az aks get-credentials --resource-group "{{ .RESOURCE_GROUP_NAME }}" --name "{{ .KUBERNETES_CLUSTER_NAME }}"
+
+  curl-echo-server:
+    vars:
+      LB_IP:
+        sh: kubectl get svc -n nginx -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'
+    cmds:
+      - |
+        curl -H 'Host: echo-server' http://{{ .LB_IP }}
+
+  deploy:
+    cmds:
+      - task: create-aks
+      - task: get-kubeconfig
+      - task: k8s:helm-upgrade-nginx
+      - task: k8s:deploy-echo-server
+      - task: curl-echo-server
+
+  default:
+    cmds:
+      - task: deploy

@@ -1,0 +1,45 @@
+# https://taskfile.dev
+
+version: "3"
+
+vars:
+  PLAN_FILE: /tmp/tf-az-aks.plan
+  GREETING: Hello, World!
+
+tasks:
+  init:
+    cmds:
+      - tofu init -upgrade
+
+  plan:
+    deps:
+      - init
+    cmds:
+      - tofu plan -out {{ .PLAN_FILE }}
+
+  apply:
+    deps:
+      - init
+      - plan
+    prompt:
+      - Are you happy with the plan and continue with apply?
+    cmds:
+      - tofu apply "{{ .PLAN_FILE }}"
+
+  destroy:
+    deps:
+      - init
+    cmds:
+      - tofu destroy
+
+  get-resource-group-name:
+    cmds:
+      - tofu output -raw resource_group_name
+
+  get-kubernetes-cluster-name:
+    cmds:
+      - tofu output -raw kubernetes_cluster_name
+
+  default:
+    task:
+      - plan
